@@ -24,7 +24,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if ($stmt->execute()) {
             http_response_code(200);
-            echo "✅ Credit submitted for account #$acct_number.";
+            echo "✅ Credit submitted for account " . $acct_number;
         } else {
             http_response_code(500);
             echo "❌ DB error: " . $stmt->error;
