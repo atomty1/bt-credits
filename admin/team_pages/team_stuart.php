@@ -44,48 +44,6 @@ include "../includes/header.php";
                                     <span>Team Luke</span>
                                 </a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark bg-dark" href="team_pages/team_stuart.php">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Stuart</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Tammy</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Nathan</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Hollie</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Leanne</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Anto</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Johnnie</span>
-                                </a>
-                            </li>
                         </ul>
                     </div>
                 </li>

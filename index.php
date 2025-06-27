@@ -1,5 +1,12 @@
 <?php
 require "includes/formhandler.php";
+
+
+// Team Leaders
+$teamLeadersResult = $conn->query("SELECT id, name FROM team_leaders");
+
+// Reasons
+$reasonsResult = $conn->query("SELECT id, reason_text FROM credit_reasons");
 ?>
 
 <!DOCTYPE html>
@@ -29,7 +36,7 @@ require "includes/formhandler.php";
 
 
     <div class="container mb-2" style="padding-top: 10px;">
-      <form action="includes/formhandler.php" class="col-md-6 card px-5 py-3" method="POST">
+      <form id="creditsForm" action="includes/formhandler.php" class="col-md-6 card px-5 py-3" method="POST">
         <fieldset>
           <h3 class="col text-center text-uppercase">Credits Form</h3>
           <p class="col mb-1 text-center">Kindly use this form to provide credits applied to customers' accounts.</p>
@@ -42,14 +49,9 @@ require "includes/formhandler.php";
             <label for="teamSelect" class="form-label">Whose team are you on?</label>
             <select id="teamSelect" class="form-select" name="team_leader" required>
               <option value="" disabled selected>--Select Team--</option>
-              <option>Luke Perrot</option>
-              <option>Stuart Coalter</option>
-              <option>Tammy McBride</option>
-              <option>Nathan </option>
-              <option>Hollie</option>
-              <option>Leanne</option>
-              <option>Anto</option>
-              <option>Jonnie</option>
+              <?php while ($row = $teamLeadersResult->fetch_assoc()): ?>
+                <option value="<?= $row['id'] ?>"><?= htmlspecialchars($row['name']) ?></option>
+              <?php endwhile; ?>
             </select>
           </div>
 
@@ -59,8 +61,8 @@ require "includes/formhandler.php";
           </div>
 
           <div class="col mb-3">
-            <label for="birthday" class="form-label">Date</label><br>
-            <input class="form-control" type="date" required name="date_applied" id="dateInput">
+            <label for="date" class="form-label">Date</label><br>
+            <input id="date" class="form-control" type="date" required name="date_applied" id="dateInput">
           </div>
 
           <div class="col mb-3">
@@ -72,22 +74,18 @@ require "includes/formhandler.php";
             <label for="reasonSelect" class="form-label">Select reason for applying credit</label>
             <select id="reasonSelect" class="form-select" name="reason" required>
               <option value="" disabled selected>--Select Reason--</option>
-              <option>Auto Compensation Not Applied</option>
-              <option>Billing Error</option>
-              <option>Complaint Closure</option>
-              <option>Complete Wifi Guarantee </option>
-              <option>Equipment Charge</option>
-              <option>Home Tech Expert</option>
-              <option>Held To Term Charge</option>
-              <option>Incorrect Charge</option>
-              <option>Missed Engineer</option>
-              <option>Reward Card</option>
-              <option>Held To Term Charge 1.6</option>
-
+              <?php while ($row = $reasonsResult->fetch_assoc()): ?>
+                <option value="<?= $row['id'] ?>"><?= htmlspecialchars($row['reason_text']) ?></option>
+              <?php endwhile; ?>
             </select>
           </div>
 
           <button type="submit" class="btn btn-primary form-control">Submit</button>
+
+          <!-- Feedback message placeholder -->
+          <div class="col mt-3">
+            <div id="feedback"></div>
+          </div>
 
         </fieldset>
       </form>
@@ -99,7 +97,7 @@ require "includes/formhandler.php";
   </div>
 
 
-  <script src="index.js"></script>
+  <!-- <script src="index.js"></script> -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-k6d4wzSIapyDyv1kpU366/PK5hCdSbCRGRCMv+eplOQJWyd1fbcAu9OCUj5zNLiq"
     crossorigin="anonymous">
@@ -116,7 +114,7 @@ require "includes/formhandler.php";
       const dd = String(today.getDate()).padStart(2, '0');
       const formattedToday = `${yyyy}-${mm}-${dd}`;
 
-      const dateInput = document.getElementById("dateInput");
+      const dateInput = document.getElementById("date");
 
       // Set the minimum date
       dateInput.setAttribute("min", formattedToday);
@@ -127,33 +125,27 @@ require "includes/formhandler.php";
       }
     }
   </script>
-
   <script>
-    document.querySelector("form").addEventListener("submit", function(e) {
+    document.getElementById('creditsForm').addEventListener('submit', function(e) {
+      e.preventDefault(); // Prevent form from reloading the page
+
       const form = e.target;
-      const inputs = form.querySelectorAll("input, select");
-      let allFilled = true;
+      const formData = new FormData(form);
 
-      inputs.forEach(input => {
-        if (input.type !== "submit" && !input.value.trim()) {
-          allFilled = false;
-          input.classList.add("is-invalid");
-        } else {
-          input.classList.remove("is-invalid");
-        }
-      });
-
-      if (!allFilled) {
-        e.preventDefault(); // Stop form submission
-        alert("Please fill in all the required fields.");
-      } else {
-        // Optional confirmation popup
-        alert("Form submitted successfully!");
-      }
+      fetch('includes/formhandler.php', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.text()) // Assuming PHP returns plain text or JSON
+        .then(data => {
+          document.getElementById('feedback').textContent = data;
+          form.reset(); // Optionally reset form
+        })
+        .catch(error => {
+          document.getElementById('feedback').textContent = error;
+        });
     });
   </script>
-
-
 </body>
 
 </html>

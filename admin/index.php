@@ -1,300 +1,139 @@
 <?php
-    session_start();
-    include '../includes/conn.php';
-    include "includes/header.php";
+session_start();
+include '../includes/conn.php';
+include "includes/header.php";
 
+$sql = 'SELECT 
+    cr.reason_text,
+    COALESCE(SUM(c.amount_credited), 0) AS total_credited,
+    COALESCE(COUNT(c.amount_credited), 0) AS num_of_credits,
+    ROUND(COALESCE(SUM(c.amount_credited), 0) * 100.0 / t.total, 2) AS percent_of_total
+    FROM 
+        credit_reasons cr
+    LEFT JOIN 
+        credits c ON cr.id = c.reason_id
+        AND MONTH(c.date_applied) = MONTH(CURRENT_DATE())
+        AND YEAR(c.date_applied) = YEAR(CURRENT_DATE())
+    JOIN (
+        SELECT COALESCE(SUM(amount_credited), 0) AS total
+        FROM credits
+        WHERE MONTH(date_applied) = MONTH(CURRENT_DATE())
+        AND YEAR(date_applied) = YEAR(CURRENT_DATE())
+    ) t ON 1=1
+    GROUP BY 
+        cr.reason_text, t.total
+    ORDER BY 
+        total_credited DESC';
 
-    $reasons = ['Auto Compensation Not Applied', 'Billing Error', 'Complaint Closure', 'Complete Wifi Guarantee', 'Equipment Charge', 'Home Tech Expert', 'Held To Term Charge', 'Incorrect Charge', 'Missed Engineer', 'Reward Card', 'Held To Term Charge 1.6'];
-    $creditData = [];
-    $totalCredit = 0;
+$team_stats_query = $conn->query($sql);
 
-    foreach ($reasons as $reason) {
-        $sql = "SELECT SUM(AMOUNT_CREDITED) AS total FROM CREDITS
-                    WHERE REASON = '$reason'
-                        AND MONTH(date_applied) = MONTH(CURRENT_DATE()) 
-                        AND YEAR(date_applied) = YEAR(CURRENT_DATE())";
+$labels = [];
+$amounts = [];
+$percentages = [];
+$team_stats = [];
+$grandTotal = 0;
+$totalNumOfCredits = 0;
 
-        $result = $conn->query($sql);
+while ($row = $team_stats_query->fetch_assoc()) {
+    $team_stats[] = $row; // Add the entire row to your $data array
+    $labels[] = $row['reason_text'];
+    $amounts[] = $row['total_credited'];
+    $percentages[] = $row['percent_of_total'];
+    $grandTotal += $row['total_credited'];
+    $totalNumOfCredits += $row['num_of_credits'];
+}
 
-        if ($result && $row = $result->fetch_assoc()) {
-            $amount = $row['total'] ?? 0;
-            $creditData[$reason] = floatval($amount);
-            $totalCredit += floatval($amount);
-        } else {
-            $creditData[$reason] = 0;
-        }
-    }
+$cards_sql = 'SELECT
+    -- Total Credit Today
+    (SELECT COALESCE(SUM(amount_credited), 0)
+     FROM credits
+     WHERE DATE(date_applied) = CURRENT_DATE()) AS total_today,
+
+    -- Total Credit This Month
+    (SELECT COALESCE(SUM(amount_credited), 0)
+     FROM credits
+     WHERE MONTH(date_applied) = MONTH(CURRENT_DATE())
+       AND YEAR(date_applied) = YEAR(CURRENT_DATE())) AS total_month,
+
+    -- Total Unique Guides This Month
+    (SELECT COUNT(DISTINCT guide_name)
+     FROM credits
+     WHERE MONTH(date_applied) = MONTH(CURRENT_DATE())
+       AND YEAR(date_applied) = YEAR(CURRENT_DATE())) AS total_guides,
+
+    -- Highest Single Credit Applied
+    (SELECT COALESCE(MAX(amount_credited), 0)
+     FROM credits) AS max_credit;';
+
+$stats = $conn->query($cards_sql)->fetch_assoc();
+
+$statCards = [
+    'total_today' => [
+        'label' => 'Total Credit Applied Today',
+        'icon'  => 'calendar_today',
+        'type' => 'money'
+    ],
+    'total_month' => [
+        'label' => 'Total Credit This Month',
+        'icon'  => 'calendar_month',
+        'type' => 'money'
+    ],
+    'total_guides' => [
+        'label' => 'Total Guides This Month',
+        'icon'  => 'groups',
+        'type' => 'text'
+    ],
+    'max_credit' => [
+        'label' => 'Highest Credit Applied',
+        'icon'  => 'trending_up',
+        'type' => 'money'
+    ],
+];
+
 ?>
 
 <body>
-    <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2  bg-white my-2" id="sidenav-main">
-        <div class="sidenav-header">
-            <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-none d-xl-none" aria-hidden="true" id="iconSidenav"></i>
-            <a class="navbar-brand px-4 py-3 m-0" href="index.php">
-                <img src="assets/img/logo.png" class="navbar-brand-img" width="64" height="26" alt="main_logo">
-                <span class="ms-1 text-sm text-uppercase text-dark"><strong>BT|EE Credits</strong></span>
-            </a>
-        </div>
-        <hr class="horizontal dark mt-0 mb-2">
-        <div class="collapse navbar-collapse  w-auto" id="sidenav-collapse-main">
-            <ul class="navbar-nav">
-                <li class="nav-item">
-                    <a class="nav-link active bg-dark text-white" href="index.php">
-                        <i class="material-symbols-rounded opacity-5">dashboard</i>
-                        <span class="nav-link-text ms-1">Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link text-dark" href="overview.php">
-                        <i class="material-symbols-rounded opacity-5">overview</i>
-                        <span class="nav-link-text ms-1">Overview</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link text-dark" data-bs-toggle="collapse" href="#teamsSubmenu" role="button" aria-expanded="false" aria-controls="teamsSubmenu">
-                        <i class="material-symbols-rounded opacity-5">table_view</i>
-                        <span class="nav-link-text ms-1">Teams Statistics</span>
-                        <i class="material-symbols-rounded float-end opacity-5">expand_more</i>
-                    </a>
-                    <div class="collapse ps-4" id="teamsSubmenu">
-                        <ul class="navbar-nav">
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Luke</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="team_pages/team_stuart.php">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Stuart</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Tammy</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Nathan</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Hollie</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Leanne</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Anto</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="#">
-                                    <i class="material-symbols-rounded opacity-5 pl-2">person</i>
-                                    <span>Team Johnnie</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-                </li>
-                
-                <li class="nav-item mt-3">
-                    <h6 class="ps-4 ms-2 text-uppercase text-xs text-dark font-weight-bolder opacity-5">Account pages</h6>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link text-dark" href="">
-                        <i class="material-symbols-rounded opacity-5">manage_accounts</i>
-                        <span class="nav-link-text ms-1">Profile</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-        <div class="sidenav-footer position-absolute w-100 bottom-0 ">
-            <div class="mx-3">
-                <a class="btn bg-gradient-dark w-100" href="#" type="button">Sign Out</a>
-            </div>
-        </div>
-    </aside>
+    <?php include './includes/nav.php'; ?>
 
     <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg ">
         <div class="container-fluid py-2">
-            <div class="row">
+            <div class="row d-print-none">
                 <div class="ms-3">
                     <h3 class="mb-0 h4 font-weight-bolder">Dashboard</h3>
                     <p class="mb-4">
                         Check the credits analysis applied by guides.
                     </p>
                 </div>
-                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                    <div class="card">
-                        <div class="card-header p-2 ps-3">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <p class="text-sm mb-0 text-capitalize">Total Credit Applied Today</p>
-                                    <h4 class="mb-4 mt-3">
-                                        <?php
-
-                                        $sql = "SELECT SUM(amount_credited) AS total_credited FROM credits
-                                            WHERE DAY(date_applied) = DAY(CURRENT_DATE()) 
-                                            AND MONTH(date_applied) = MONTH(CURRENT_DATE())
-                                            AND YEAR(date_applied) = YEAR(CURRENT_DATE())";
-
-                                        $result = $conn->query($sql);
-
-                                        // Check if query ran successfully
-                                        if (!$result) {
-                                            die("Query error: " . $conn->error);
-                                        }
-
-                                        // Fetch result row
-                                        $row = $result->fetch_assoc();
-
-                                        // Safely get the total, handle NULL
-                                        $totalCredited = $row['total_credited'] ?? 0;
-
-                                        // Display result
-                                        echo "£ " . number_format($totalCredited, 2);
-
-                                        ?>
-                                    </h4>
-                                </div>
-                                <div
-                                    class="icon icon-md icon-shape bg-gradient-dark shadow-dark shadow text-center border-radius-lg">
-                                    <i class="material-symbols-rounded opacity-10">weekend</i>
+                <?php foreach ($statCards as $key => $meta): ?>
+                    <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
+                        <div class="card">
+                            <div class="card-header p-2 ps-3">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <p class="text-sm mb-0 text-capitalize"><?= $meta['label'] ?></p>
+                                        <h4 class="mb-4 mt-3">
+                                            <?= $meta['type'] === 'text' ? $stats[$key] : '£' . number_format($stats[$key], 2) ?>
+                                        </h4>
+                                    </div>
+                                    <div class="icon icon-md icon-shape bg-gradient-dark shadow-dark shadow text-center border-radius-lg">
+                                        <i class="material-symbols-rounded opacity-10"><?= $meta['icon'] ?></i>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                    <div class="card">
-                        <div class="card-header p-2 ps-3">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <p class="text-sm mb-0 text-capitalize">Total Credit this Month</p>
-                                    <h4 class="mb-4 mt-3">
-                                        <?php
+                <?php endforeach; ?>
+            </div>
 
-                                        $sql = "SELECT SUM(amount_credited) AS total_credited_month FROM credits
-                                            WHERE
-                                            MONTH(date_applied) = MONTH(CURRENT_DATE()) 
-                                            AND YEAR(date_applied) = YEAR(CURRENT_DATE())";
-
-                                        $result = $conn->query($sql);
-
-                                        // Check if query ran successfully
-                                        if (!$result) {
-                                            die("Query error: " . $conn->error);
-                                        }
-
-                                        // Fetch result row
-                                        $row = $result->fetch_assoc();
-
-                                        // Safely get the total, handle NULL
-                                        $totalCreditedMonth = $row['total_credited_month'] ?? 0;
-
-                                        $_SESSION['total_monthly_credit'] = $totalCreditedMonth;
-
-                                        // Display result
-                                        echo "£ " . number_format($totalCreditedMonth, 2);
-
-                                        ?>
-                                    </h4>
-                                </div>
-                                <div
-                                    class="icon icon-md icon-shape bg-gradient-dark shadow-dark shadow text-center border-radius-lg">
-                                    <i class="material-symbols-rounded opacity-10">weekend</i>
-                                </div>
-                            </div>
-                        </div>
+            <div class="row mb-4 mt-4">
+                <div class="col-lg-8 col-md-8 mb-md-0 mb-4 pr-5">
+                    <div class="card-body">
+                        <canvas id="creditAmountChart" height="150"></canvas>
                     </div>
                 </div>
-                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                    <div class="card">
-                        <div class="card-header p-2 ps-3">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <p class="text-sm mb-0 text-capitalize">Total Guides This Month</p>
-                                    <h4 class="mb-4 mt-3">
-                                        <?php
-                                        $sql = "SELECT COUNT(GUIDE_NAME) AS total_guides FROM CREDITS
-                                             WHERE MONTH(date_applied) = MONTH(CURRENT_DATE())
-                                            AND YEAR(date_applied) = YEAR(CURRENT_DATE())";
-
-                                        $result = $conn->query($sql);
-
-                                        // Check if query ran successfully
-                                        if (!$result) {
-                                            die("Query error: " . $conn->error);
-                                        }
-
-                                        // Fetch result row
-                                        $row = $result->fetch_assoc();
-
-                                        // Safely get the total, handle NULL
-                                        $totalGuides = $row['total_guides'] ?? 0;
-
-                                        // Display result
-                                        echo " " . ($totalGuides);
-
-                                        ?>
-                                    </h4>
-                                </div>
-                                <div
-                                    class="icon icon-md icon-shape bg-gradient-dark shadow-dark shadow text-center border-radius-lg">
-                                    <i class="material-symbols-rounded opacity-10">person</i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-xl-0 mb-4">
-                    <div class="card">
-                        <div class="card-header p-2 ps-3">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <p class="text-sm mb-0 text-capitalize">Highest Credit Applied</p>
-                                    <h4 class="mt-3 mb-4">
-                                        <?php
-                                        $sql = "SELECT MAX(AMOUNT_CREDITED) AS max_amount FROM CREDITS";
-                                        $result = $conn->query($sql);
-
-                                        // Check if query ran successfully
-                                        if (!$result) {
-                                            die("Query error: " . $conn->error);
-                                        }
-
-                                        // Fetch result row
-                                        $row = $result->fetch_assoc();
-
-                                        // Safely get the total, handle NULL
-                                        $maximumCredit = $row['max_amount'] ?? 0;
-
-                                        // Display result
-                                        echo "£ " . ($maximumCredit = $row['max_amount'] ?? 0
-                                        );
-
-                                        ?>
-                                    </h4>
-                                </div>
-                                <div
-                                    class="icon icon-md icon-shape bg-gradient-dark shadow-dark shadow text-center border-radius-lg">
-                                    <i class="material-symbols-rounded opacity-10">leaderboard</i>
-                                </div>
-                            </div>
-                        </div>
+                <div class="col-lg-4 col-md-4 mb-md-0 mb-4 pr-5">
+                    <div class="card-body">
+                        <canvas id="creditPercentChart" height="150"></canvas>
                     </div>
                 </div>
             </div>
@@ -315,14 +154,17 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="card-body px-0 pb-2 ">
+                        <div class="card-body px-2 pb-2 ">
                             <div class="table-responsive">
-                                <table class="table align-items-center mb-0">
-                                    <thead>
+                                <table class="table align-items-center mb-0 table-striped">
+                                    <thead class="px-0">
                                         <tr>
                                             <th
                                                 class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                                                 Reasons for credits</th>
+                                            <th
+                                                class="text-uppercase text-secondary text-xxs text-center font-weight-bolder opacity-7">
+                                                Number of Credits</th>
                                             <th
                                                 class="text-uppercase text-secondary text-xxs text-end font-weight-bolder opacity-7">
                                                 Amount Credited</th>
@@ -332,26 +174,28 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($creditData as $reason => $amount):
-                                            $percentage = ($totalCredit > 0) ? ($amount / $totalCredit) * 100 : 0;
-                                        ?>
+                                        <?php foreach ($team_stats as $row): ?>
                                             <tr>
                                                 <td>
-                                                    <p class="text-sm font-weight-normal mb-0"><?= $reason ?></p>
+                                                    <p class="text-sm font-weight-normal mb-0"><?= htmlspecialchars($row['reason_text']) ?></p>
+                                                </td>
+                                                <td>
+                                                    <p class="text-sm text-center font-weight-normal mb-0"><?= $row['num_of_credits'] ?></p>
                                                 </td>
                                                 <td>
                                                     <p class="text-sm text-end font-weight-bold mb-0">
-                                                        £<?= number_format($amount, 2) ?></p>
+                                                        £<?= number_format($row['total_credited'], 2) ?></p>
                                                 </td>
                                                 <td>
                                                     <p class="text-sm text-center mb-0">
-                                                        <?= number_format($percentage, 2) ?>%</p>
+                                                        <?= $row['percent_of_total'] ?>%</p>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                         <tr class="border-top">
                                             <td><strong class="text-uppercase">Total</strong></td>
-                                            <td class="text-end"><strong>£<?= number_format($totalCredit, 2) ?></strong>
+                                            <td class="text-center"><strong><?= $totalNumOfCredits ?></strong>
+                                            <td class="text-end"><strong>£<?= number_format($grandTotal, 2) ?></strong>
                                             </td>
                                             <td class="text-center"><strong>100%</strong></td>
                                         </tr>
@@ -363,24 +207,79 @@
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-lg-12 col-md-12 mb-md-0 mb-4 pr-5">
-                    <div class="card-body">
-                        <canvas id="creditHistogram" height="120"></canvas>
-                    </div>
-                </div>
-                <div class="col-lg-6 col-md-12 mb-md-0 mb-4 pr-5">
-                    <div class="card-body">
-                        <canvas id="creditHistogram" height="150"></canvas>
-                    </div>
-                </div>
-            </div>
-
             <?php include 'includes/footer.php' ?>
         </div>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        const labels = <?= json_encode($labels) ?>;
+        const amounts = <?= json_encode($amounts) ?>;
+        const percentages = <?= json_encode($percentages) ?>;
+
+        // Histogram (Bar Chart) for Amount Credited
+        new Chart(document.getElementById('creditAmountChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Amount Credited (£)',
+                    data: amounts,
+                    backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Total Amount Credited by Reason'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Amount (£)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Pie Chart for Percentage Distribution
+        new Chart(document.getElementById('creditPercentChart').getContext('2d'), {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '% of Total',
+                    data: percentages,
+                    backgroundColor: labels.map((_, i) =>
+                        `hsl(${(i + 30) * (360 / labels.length)}, 70%, 60%)`
+                    )
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Percentage of Total Credit by Reason'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.label}: ${ctx.parsed}%`
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+    <!-- <script>
         const ctx = document.getElementById('creditHistogram').getContext('2d');
 
         const data = {
@@ -425,6 +324,7 @@
         };
 
         new Chart(ctx, config);
-    </script>
+    </script> -->
 </body>
+
 </html>
