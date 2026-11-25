@@ -21,7 +21,7 @@ include "includes/header.php";
         <li class="nav-item">
           <a class="nav-link text-dark" href="index.php">
             <i class="material-symbols-rounded opacity-5">dashboard</i>
-            <span class="nav-link-text ms-1">Dashboard</span>
+            <span class="nav-link-text ms-1">Dashboard Page</span>
           </a>
         </li>
         <li class="nav-item">
