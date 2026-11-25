@@ -44,7 +44,7 @@ while ($row = $team_stats_query->fetch_assoc()) {
 }
 
 $cards_sql = 'SELECT
-    -- Total Credit Today
+    -- Total Credit for Today
     (SELECT COALESCE(SUM(amount_credited), 0)
      FROM credits
      WHERE DATE(date_applied) = CURRENT_DATE()) AS total_today,
